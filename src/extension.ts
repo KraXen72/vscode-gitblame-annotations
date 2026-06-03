@@ -19,12 +19,14 @@ const fileDecorations = new Map<string, {
 
 interface BlameDisplayConfig {
     mergeCommitLines: boolean,
+    mergedCommitMessageMinLines: number,
     highlightChangedLines: boolean,
     dateFormatStyle: DateFormatStyle,
     authorNameStyle: AuthorNameStyle
 }
 
 const MaxTitleWidth = 25;
+const DefaultMergedCommitMessageMinLines = 3;
 
 /**
 * 激活插件
@@ -460,6 +462,7 @@ function buildDecorationOptions(blames: Blame[], fileName: string, repoWebBase: 
 
     const config: BlameDisplayConfig = {
         mergeCommitLines: cfg.get('mergeCommitLines', false),
+        mergedCommitMessageMinLines: getMergedCommitMessageMinLines(cfg),
         highlightChangedLines: cfg.get('highlightChangedLines', false),
         dateFormatStyle: validateConfigEnum(cfg, VALID_DATEFORMATSTYLES, 'dateFormatStyle', defaultDateFormatStyle),
         authorNameStyle: validateConfigEnum(cfg, VALID_AUTHORNAMESTYLES, 'authorNameStyle', defaultAuthorNameStyle),
@@ -572,52 +575,75 @@ function buildHoverMessage(blame: Blame, fileName: string, repoWebBase: string):
     return content;
 }
 
-function fillTitles(blames: Blame[], config: BlameDisplayConfig): number {
-    let maxWidth = 0;
+function getMergedCommitMessageMinLines(cfg: vscode.WorkspaceConfiguration): number {
+    const value = cfg.get<number>('mergedCommitMessageMinLines', DefaultMergedCommitMessageMinLines);
+    if (!Number.isFinite(value)) {
+        return DefaultMergedCommitMessageMinLines;
+    }
 
+    return Math.floor(value);
+}
+
+function fillTitles(blames: Blame[], config: BlameDisplayConfig): number {
     // Compute per-line timestamp strings and the max width for alignment padding
     const lineTimestampText = new Map<number, string>();
     const maxTimestampWidth = blames.reduce((maxW, line) => {
         if (!line.commited) { return maxW; }
-        const text = formatDate(line.timestamp, config.dateFormatStyle)
+        const text = formatDate(line.timestamp, config.dateFormatStyle);
         lineTimestampText.set(line.line, text);
         return Math.max(maxW, text.length);
     }, 8);
 
-    const textWidths = new Map<string, { width: number, widths: number[] }>();
     blames.forEach(line => {
         if (line.commited) {
             const tsText = (lineTimestampText.get(line.line) ?? '').padEnd(maxTimestampWidth, '\u2007');
             const formattedAuthor = formatAuthor(line.author, config.authorNameStyle);
-            line.title = `${tsText} ${formattedAuthor}`
+            line.title = `${tsText} ${formattedAuthor}`;
         } else {
             line.title = '';
         }
+    });
 
-        if (!textWidths.has(line.commit)) {
-            const { width, widths } = getTextWidth(line.title);
-            textWidths.set(line.commit, { width, widths });
-            if (width > maxWidth) { maxWidth = width; }
+    // Blank non-first lines of each consecutive same-commit block, optionally
+    // using the second line for the commit summary when the block is large enough.
+    if (config.mergeCommitLines) {
+        const summaryMinLines = config.mergedCommitMessageMinLines;
+        const shouldShowSummaries = summaryMinLines >= 2;
+
+        let blockStart = 0;
+        for (let i = 1; i < blames.length; i++) {
+            const bothBlamesCommitted = blames[blockStart].commited && blames[i].commited;
+            const sameCommit = blames[i].commit === blames[blockStart].commit;
+            const sameBlock = bothBlamesCommitted && sameCommit;
+            if (!sameBlock) {
+                blockStart = i;
+                continue;
+            }
+            
+            // by default, when merging, we blank out the rest of the lines
+            blames[i].title = '';
+            const blockLength = i - blockStart + 1;
+            // if it's the 2nd line, and should show summaries, show it.
+            if (shouldShowSummaries && blockLength === summaryMinLines) {
+                blames[blockStart + 1].title = blames[blockStart + 1].summary;
+            }
         }
+    }
+
+    let maxWidth = 0;
+    blames.forEach(line => {
+        const { width } = getTextWidth(line.title);
+        if (width > maxWidth) { maxWidth = width; }
     });
 
     if (maxWidth > MaxTitleWidth) {
         maxWidth = MaxTitleWidth;
         blames.forEach(line => {
-            const { width, widths } = textWidths.get(line.commit) || { width: 0, widths: [] };
+            const { width, widths } = getTextWidth(line.title);
             if (width > maxWidth) {
                 line.title = trancateText(line.title, maxWidth - 1, widths) + "…";
             }
         });
-    }
-
-    // Blank non-first lines of each consecutive same-commit block
-    if (config.mergeCommitLines) {
-        for (let i = 1; i < blames.length; i++) {
-            if (blames[i].commited && blames[i].commit === blames[i - 1].commit) {
-                blames[i].title = '';
-            }
-        }
     }
 
     return maxWidth;

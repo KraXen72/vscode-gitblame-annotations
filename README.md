@@ -15,6 +15,7 @@ Display git blame in editor gutter like JetBrains IDEs or GitLens.
 
 ## Configuration
 - `gitblame.mergeCommitLines`: Show annotation only on the first line of each commit block, leaving subsequent lines blank.
+- `gitblame.mergedCommitMessageMinLines`: When `gitblame.mergeCommitLines` is enabled, show the commit message on the second line of merged commit blocks with at least this many lines. Set to `0` to disable.
 - `gitblame.highlightChangedLines`: Highlight all lines of the commit under the cursor.
 - `gitblame.dateFormatStyle`: The date format for blame annotations. (Pick from several supported date formats)
 - `gitblame.authorNameStyle`: Whether to show the Commit Author's full name, or only first/last

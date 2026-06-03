@@ -68,6 +68,12 @@
                     "default": false,
                     "description": "Show annotation only on the first line of each commit block, leaving subsequent lines blank."
                 },
+                "gitblame.mergedCommitMessageMinLines": {
+                    "type": "number",
+                    "default": 3,
+                    "minimum": 0,
+                    "description": "When gitblame.mergeCommitLines is enabled, show the commit message on the second line of merged commit blocks with at least this many lines. Set to 0 to disable."
+                },
                 "gitblame.highlightChangedLines": {
                     "type": "boolean",
                     "default": false,
@@ -75,7 +81,7 @@
                 },
                 "gitblame.dateFormatStyle": {
                     "type": "string",
-                    "default": "YYYY-MM-DD",
+                    "default": "Y/M/D",
                     "enum": [
                         "YYYY-MM-DD",
                         "Y/M/D",
