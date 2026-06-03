@@ -25,6 +25,11 @@ interface BlameDisplayConfig {
     authorNameStyle: AuthorNameStyle
 }
 
+interface BlameTitleLayout {
+    maxWidth: number,
+    summaryTitleLines: Set<number>
+}
+
 const MaxTitleWidth = 25;
 const DefaultMergedCommitMessageMinLines = 3;
 
@@ -468,7 +473,7 @@ function buildDecorationOptions(blames: Blame[], fileName: string, repoWebBase: 
         authorNameStyle: validateConfigEnum(cfg, VALID_AUTHORNAMESTYLES, 'authorNameStyle', defaultAuthorNameStyle),
     };
 
-    const maxWidth = fillTitles(blames, config);
+    const { maxWidth, summaryTitleLines } = fillTitles(blames, config);
     if (maxWidth <= 0) {
         return [];
     }
@@ -497,7 +502,7 @@ function buildDecorationOptions(blames: Blame[], fileName: string, repoWebBase: 
                     color: new vscode.ThemeColor('list.deemphasizedForeground'),
                     width: `${maxWidth + 2}ch`,
                     fontWeight: 'normal',
-                    fontStyle: 'normal'
+                    fontStyle: summaryTitleLines.has(index) ? 'italic' : 'normal'
                 }
             }
         };
@@ -584,7 +589,9 @@ function getMergedCommitMessageMinLines(cfg: vscode.WorkspaceConfiguration): num
     return Math.floor(value);
 }
 
-function fillTitles(blames: Blame[], config: BlameDisplayConfig): number {
+function fillTitles(blames: Blame[], config: BlameDisplayConfig): BlameTitleLayout {
+    const summaryTitleLines = new Set<number>();
+
     // Compute per-line timestamp strings and the max width for alignment padding
     const lineTimestampText = new Map<number, string>();
     const maxTimestampWidth = blames.reduce((maxW, line) => {
@@ -620,12 +627,11 @@ function fillTitles(blames: Blame[], config: BlameDisplayConfig): number {
                 continue;
             }
             
-            // by default, when merging, we blank out the rest of the lines
             blames[i].title = '';
             const blockLength = i - blockStart + 1;
-            // if it's the 2nd line, and should show summaries, show it.
             if (shouldShowSummaries && blockLength === summaryMinLines) {
                 blames[blockStart + 1].title = blames[blockStart + 1].summary;
+                summaryTitleLines.add(blockStart + 1);
             }
         }
     }
@@ -646,5 +652,5 @@ function fillTitles(blames: Blame[], config: BlameDisplayConfig): number {
         });
     }
 
-    return maxWidth;
+    return { maxWidth, summaryTitleLines };
 }
